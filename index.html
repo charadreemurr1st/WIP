@@ -1,0 +1,617 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WIP</title>
+  <link rel="icon" href="assets/wrongheart.png" type="image/x-icon">
+  <style>
+    /* Custom fonts */
+    @font-face {
+      font-family: 'Determination Mono';
+      src: url('assets/Determination Mono Web/DeterminationMonoWebRegular.ttf') format('truetype');
+      font-weight: normal;
+      font-style: normal;
+    }
+    @font-face {
+      font-family: 'Determination Sans';
+      src: url('assets/Determination Mono Web/DeterminationSansWebRegular.ttf') format('truetype');
+      font-weight: normal;
+      font-style: normal;
+    }
+    html, body {
+      height: 100%;
+      margin: 0;
+      padding: 0;
+      background: #000;
+      width: 100vw;
+      height: 100vh;
+      overflow: hidden;
+      font-family: 'Determination Mono', 'Determination Sans', monospace;
+    }
+    #depth-bg {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      object-fit: cover;
+      z-index: 0;
+      display: block;
+      pointer-events: none;
+    }
+    #center-img {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      z-index: 2;
+      width: 64px;
+      height: 64px;
+      max-width: 15vw;
+      max-height: 15vw;
+      display: block;
+      filter: drop-shadow(0 0 16px crimson);
+      animation: pulse-glow 1.2s infinite;
+    }
+    @keyframes pulse-glow {
+      0% {
+        filter: drop-shadow(0 0 8px crimson) brightness(1);
+        opacity: 0.85;
+      }
+      50% {
+        filter: drop-shadow(0 0 32px crimson) brightness(1.2);
+        opacity: 1;
+      }
+      100% {
+        filter: drop-shadow(0 0 8px crimson) brightness(1);
+        opacity: 0.85;
+      }
+    }
+    #notready-img {
+      position: absolute;
+      top: 30%; /* Move higher for game area */
+      left: 50%;
+      transform: translate(-50%, -50%);
+      z-index: 2;
+      max-width: 80vw;
+      max-height: 40vh;
+      display: block;
+    }
+    #game-area {
+      position: absolute;
+      left: 50%;
+      top: 65%;
+      transform: translate(-50%, -50%);
+      width: 600px;
+      height: 220px;
+      max-width: 95vw;
+      max-height: 40vh;
+      background: rgba(0,0,0,0.7);
+      border: 4px solid #fff;
+      border-radius: 18px;
+      box-shadow: 0 0 32px #000b, 0 0 0 4px #222a;
+      z-index: 4;
+      display: none;
+      overflow: hidden;
+    }
+    #game-canvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+      pointer-events: auto;
+      background: transparent;
+    }
+    #game-score {
+      position: absolute;
+      left: 50%;
+      top: 10px;
+      transform: translateX(-50%);
+      color: #fff;
+      font-family: 'Determination Mono', 'Determination Sans', monospace;
+      font-size: 2rem;
+      text-shadow: 2px 2px 8px #000, 0 0 8px #fff;
+      z-index: 5;
+      pointer-events: none;
+      user-select: none;
+    }
+    .icespell-effect {
+      position: absolute;
+      pointer-events: none;
+      z-index: 100;
+      width: 64px;
+      height: 64px;
+      opacity: 0.9;
+      transition: opacity 2s linear;
+      will-change: transform, opacity;
+    }
+    #snow-canvas {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      pointer-events: none;
+      z-index: 3;
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <img id="depth-bg" src="assets/depths.jpg" alt="Depth Background">
+  <img id="center-img" src="assets/wrongheart.png" alt="Wrong Heart">
+  <canvas id="snow-canvas"></canvas>
+  <div id="game-area">
+    <span id="game-score">Score: 0</span>
+    <canvas id="game-canvas"></canvas>
+  </div>
+  <img id="notready-img" src="assets/notready.png" alt="Not Ready" style="display:none;">
+  <audio id="icesoul-audio" src="assets/snd_icesoul.ogg"></audio>
+  <audio id="notready-audio" src="assets/sitenotready.mp3" loop></audio>
+  <audio id="starlight-audio" src="assets/Starlight.mp3" loop></audio>
+  <audio id="iceshock-audio" src="assets/iceshock.mp3"></audio>
+  <script>
+    const centerImg = document.getElementById('center-img');
+    const snowCanvas = document.getElementById('snow-canvas');
+    const gameCanvas = document.getElementById('game-canvas');
+    const depthBg = document.getElementById('depth-bg');
+    const notReadyImg = document.getElementById('notready-img');
+    const icesoulAudio = document.getElementById('icesoul-audio');
+    const notreadyAudio = document.getElementById('notready-audio');
+    const starlightAudio = document.getElementById('starlight-audio');
+    const iceshockAudio = document.getElementById('iceshock-audio');
+    let transitionStarted = false;
+    let gameStarted = false;
+    let gameScore = 0;
+    let gameOver = false;
+
+
+    function startSnowTransition() {
+      if (transitionStarted) return;
+      transitionStarted = true;
+      icesoulAudio.currentTime = 0;
+      icesoulAudio.play();
+      centerImg.style.display = 'none';
+      snowCanvas.style.display = 'block';
+      // Wait for audio to finish before transitioning
+      let finished = false;
+      function finishScene() {
+        if (finished) return;
+        finished = true;
+        snowCanvas.style.display = 'none';
+        notReadyImg.style.display = 'block';
+        document.getElementById('game-area').style.display = 'block';
+        notreadyAudio.play();
+        startGame();
+      }
+      icesoulAudio.addEventListener('ended', finishScene);
+      animateSnowstorm(() => {
+        if (icesoulAudio.ended) finishScene();
+      });
+    }
+
+
+    // 5/100 chance for iceshock/icespell effect
+    function tryIceshockEffect(x, y) {
+      if (Math.random() < 0.05) {
+        iceshockAudio.currentTime = 0;
+        iceshockAudio.play();
+        spawnIcespellEffect(x, y);
+      }
+    }
+
+    function spawnIcespellEffect(x, y) {
+      const img = document.createElement('img');
+      img.src = 'assets/icespell.png';
+      img.className = 'icespell-effect';
+      img.style.left = (x - 32) + 'px';
+      img.style.top = (y - 32) + 'px';
+      document.body.appendChild(img);
+      // Animate: spiral out and fade
+      const start = Date.now();
+      function animate() {
+        const t = (Date.now() - start) / 2000;
+        if (t > 1) {
+          img.style.opacity = '0';
+          setTimeout(() => img.remove(), 500);
+          return;
+        }
+        const angle = t * 2 * Math.PI * 1.5;
+        const radius = 10 + 60 * t;
+        img.style.transform = `translate(${Math.cos(angle)*radius}px, ${Math.sin(angle)*radius}px)`;
+        requestAnimationFrame(animate);
+      }
+      animate();
+    }
+
+    // Register click anywhere for iceshock effect and snow transition
+    function handleFirstScreenClick(e) {
+      tryIceshockEffect(e.clientX, e.clientY);
+      // Only trigger transition if centerImg is visible and not already started
+      if (!transitionStarted && centerImg.style.display !== 'none') {
+        startSnowTransition();
+      }
+    }
+    // Use capture to ensure it works even if centerImg is covered
+    document.addEventListener('click', handleFirstScreenClick, true);
+    
+    // Dino-style mini-game
+    function startGame() {
+      if (gameStarted) return;
+      gameStarted = true;
+      gameOver = false;
+      gameScore = 0;
+      const gameArea = document.getElementById('game-area');
+      const scoreElem = document.getElementById('game-score');
+      const ctx = gameCanvas.getContext('2d');
+      gameCanvas.width = 600;
+      gameCanvas.height = 220;
+      let heart = { x: 60, y: 220-80, vy: 0, w: 40, h: 32, jumping: false };
+      let fireballs = [];
+      let gravity = 1.5;
+      let ground = 220-30;
+      let lastFireball = 0;
+      let fireballInterval = 1400;
+      let running = true;
+      let heartImg = new Image();
+      heartImg.src = 'assets/bluesoul.png';
+      let fireballImg = new Image();
+      fireballImg.src = 'assets/fireball.png';
+      let fireballsJumped = 0;
+      let checkpoint = 0;
+      let popupActive = false;
+      let popupChoice = 0;
+      let lives = 3;
+      
+      // High score and invincibility logic
+      let highScore = localStorage.getItem('wipHighScore') ? parseInt(localStorage.getItem('wipHighScore')) : 0;
+      let invincible = false;
+      let invincEnd = 0;
+      
+      // High score display
+      let highScoreElem = document.getElementById('game-highscore');
+      if (!highScoreElem) {
+        highScoreElem = document.createElement('span');
+        highScoreElem.id = 'game-highscore';
+        highScoreElem.style.position = 'absolute';
+        highScoreElem.style.right = '20px';
+        highScoreElem.style.top = '10px';
+        highScoreElem.style.zIndex = '5';
+        highScoreElem.style.fontSize = '2rem';
+        highScoreElem.style.pointerEvents = 'none';
+        highScoreElem.style.userSelect = 'none';
+        highScoreElem.style.transition = 'color 0.3s';
+        highScoreElem.style.color = '#fff';
+        highScoreElem.style.fontFamily = "'Determination Mono', 'Determination Sans', monospace";
+        highScoreElem.style.textShadow = '2px 2px 8px #000, 0 0 8px #fff';
+        gameArea.appendChild(highScoreElem);
+      }
+      
+      function renderHighScore(flash = false) {
+        highScoreElem.textContent = 'High: ' + highScore;
+        if (flash) {
+          highScoreElem.style.color = '#0ff';
+          setTimeout(() => highScoreElem.style.color = '#fff', 1200);
+        } else {
+          highScoreElem.style.color = '#fff';
+        }
+      }
+      
+      // Lives display
+      let livesElem = document.getElementById('game-lives');
+      if (!livesElem) {
+        livesElem = document.createElement('span');
+        livesElem.id = 'game-lives';
+        livesElem.style.position = 'absolute';
+        livesElem.style.left = '20px';
+        livesElem.style.top = '10px';
+        livesElem.style.zIndex = '5';
+        livesElem.style.fontSize = '2rem';
+        livesElem.style.pointerEvents = 'none';
+        livesElem.style.userSelect = 'none';
+        gameArea.appendChild(livesElem);
+      }
+      
+      function renderLives() {
+        let html = '';
+        for (let i = 0; i < 3; i++) {
+          if (i < lives) {
+            html += `<img src="assets/wrongheart.png" style="width:32px;height:32px;vertical-align:middle;filter:drop-shadow(0 0 8px crimson);margin-right:4px;">`;
+          } else {
+            html += `<img src="assets/wrongheart.png" style="width:32px;height:32px;vertical-align:middle;filter:grayscale(1) brightness(0.3) drop-shadow(0 0 2px #222);opacity:0.5;margin-right:4px;">`;
+          }
+        }
+        livesElem.innerHTML = html;
+      }
+      
+      function reset(fromCheckpoint = false) {
+        invincible = true;
+        invincEnd = Date.now() + 3000;
+        heart.x = 60;
+        heart.y = ground-48;
+        heart.vy = 0;
+        heart.jumping = false;
+        fireballs = [];
+        running = true;
+        popupActive = false;
+        popupChoice = 0;
+        lives = 3;
+        renderLives();
+        if (fromCheckpoint && checkpoint > 0) {
+          fireballsJumped = checkpoint;
+          gameScore = calcScore(checkpoint);
+        } else {
+          fireballsJumped = 0;
+          gameScore = 0;
+          checkpoint = 0;
+        }
+        scoreElem.textContent = 'Score: ' + gameScore;
+      }
+      
+      function jump() {
+        if (!heart.jumping) {
+          heart.vy = -18;
+          heart.jumping = true;
+        }
+      }
+      
+      function moveLeft() { heart.x = Math.max(0, heart.x - 24); }
+      function moveRight() { heart.x = Math.min(gameCanvas.width - heart.w, heart.x + 24); }
+      
+      document.addEventListener('keydown', e => {
+        // Prevent default for space/arrow keys to avoid scrolling
+        if (["Space","ArrowUp","ArrowDown","ArrowLeft","ArrowRight"].includes(e.code)) e.preventDefault();
+        if (popupActive) {
+          if (e.code === 'ArrowLeft' || e.code === 'KeyA') popupChoice = 0;
+          if (e.code === 'ArrowRight' || e.code === 'KeyD') popupChoice = 1;
+          if (e.code === 'Space' || e.code === 'Enter') {
+            if (popupChoice === 0) reset(false);
+            else reset(true);
+          }
+          return;
+        }
+        if (e.code === 'Space') jump();
+        if (e.code === 'ArrowUp' || e.code === 'KeyW') jump();
+        if (e.code === 'ArrowLeft' || e.code === 'KeyA') moveLeft();
+        if (e.code === 'ArrowRight' || e.code === 'KeyD') moveRight();
+      });
+      
+      // Touch controls for mobile
+      gameArea.addEventListener('touchstart', function(e) {
+        jump();
+        e.preventDefault();
+      });
+      
+      function draw() {
+        ctx.clearRect(0, 0, gameCanvas.width, gameCanvas.height);
+        // Draw ground
+        ctx.fillStyle = 'rgba(255,255,255,0.15)';
+        ctx.fillRect(0, ground, gameCanvas.width, 10);
+        // Draw heart
+        ctx.save();
+        // Pulsing navy blue silhouette
+        let pulse = 0.7 + 0.3 * Math.sin(Date.now()/400);
+        ctx.shadowColor = 'navy';
+        ctx.shadowBlur = 18 * pulse;
+        // Invincibility fade
+        let soulAlpha = 0.85 + 0.15 * pulse;
+        if (invincible && Date.now() < invincEnd) {
+          soulAlpha = 0.5 + 0.5 * Math.abs(Math.sin((Date.now()/300)));
+        }
+        ctx.globalAlpha = soulAlpha;
+        ctx.drawImage(heartImg, heart.x, heart.y, heart.w, heart.h);
+        ctx.globalAlpha = 1;
+        ctx.restore();
+        
+        renderHighScore();
+        
+        // Draw fireballs
+        for (let f of fireballs) {
+          ctx.drawImage(fireballImg, f.x, f.y, f.w, f.h);
+        }
+        
+        renderLives();
+        
+        // Draw popup if dead
+        if (popupActive) {
+          ctx.save();
+          ctx.globalAlpha = 0.95;
+          ctx.fillStyle = '#222';
+          ctx.fillRect(80, 60, 440, 105);
+          ctx.strokeStyle = '#fff';
+          ctx.lineWidth = 4;
+          ctx.strokeRect(80, 60, 440, 105);
+          ctx.font = 'bold 28px Determination Mono, monospace';
+          ctx.fillStyle = '#fff';
+          ctx.fillText('Game Over!', 180, 100);
+          ctx.font = '20px Determination Mono, monospace';
+          ctx.fillText('Continue from checkpoint (' + checkpoint + ')?', 120, 130);
+          ctx.fillText('Start Over', 120, 160);
+          ctx.fillText('Continue', 340, 160);
+          ctx.globalAlpha = 1;
+          ctx.save();
+          ctx.strokeStyle = popupChoice === 0 ? 'crimson' : '#fff';
+          ctx.lineWidth = 3;
+          ctx.strokeRect(110, 150, 120, 30);
+          ctx.restore();
+          ctx.save();
+          ctx.strokeStyle = popupChoice === 1 ? 'crimson' : '#fff';
+          ctx.lineWidth = 3;
+          ctx.strokeRect(330, 150, 120, 30);
+          ctx.restore();
+          ctx.restore();
+        }
+      }
+      
+      function update() {
+        if (!running) return;
+        // Heart physics
+        heart.y += heart.vy;
+        // Secret: holding jump slows fall
+        let jumpHeld = window.jumpHeld || false;
+        if (heart.jumping && window.jumpHeld) {
+          heart.vy += gravity * 0.35;
+        } else {
+          heart.vy += gravity;
+        }
+        if (heart.y >= ground-48) {
+          heart.y = ground-48;
+          heart.vy = 0;
+          heart.jumping = false;
+        }
+        // Fireballs
+        if (Date.now() - lastFireball > fireballInterval) {
+          fireballs.push({ x: gameCanvas.width, y: ground-32, w: Math.round(40*1.02), h: Math.round(32*1.02), speed: 4+Math.random()*2, jumped: false });
+          lastFireball = Date.now();
+        }
+        for (let f of fireballs) {
+          f.x -= f.speed;
+        }
+        // Remove off-screen
+        fireballs = fireballs.filter(f => f.x + f.w > 0);
+        // Collision
+        if (!invincible || Date.now() > invincEnd) {
+          for (let f of fireballs) {
+            if (f.x < heart.x+heart.w-8 && f.x+f.w > heart.x+8 && f.y < heart.y+heart.h-8 && f.y+f.h > heart.y+8) {
+              if (lives > 1) {
+                lives--;
+                renderLives();
+                // Reset heart position after hit
+                heart.x = 60;
+                heart.y = ground-48;
+                heart.vy = 0;
+                heart.jumping = false;
+                // Remove fireball
+                f.x = -100;
+                invincible = true;
+                invincEnd = Date.now() + 3000;
+              } else {
+                lives--;
+                renderLives();
+                running = false;
+                gameOver = true;
+                popupActive = true;
+                invincible = true;
+                invincEnd = Date.now() + 3000;
+              }
+              return;
+            }
+          }
+        }
+        
+        // High score logic
+        if (gameScore > highScore) {
+          highScore = gameScore;
+          localStorage.setItem('wipHighScore', highScore);
+          renderHighScore(true);
+        }
+        
+        // Jumped fireball scoring
+        for (let f of fireballs) {
+          if (!f.jumped && f.x + f.w < heart.x && heart.y < ground-48) {
+            f.jumped = true;
+            fireballsJumped++;
+            let pts = 1;
+            if (fireballsJumped % 100 === 0) { pts = 100; checkpoint = fireballsJumped; }
+            else if (fireballsJumped % 50 === 0) { pts = 50; checkpoint = fireballsJumped; }
+            else if (fireballsJumped % 10 === 0) { pts = 10; }
+            else if (fireballsJumped % 5 === 0) { pts = 5; }
+            gameScore += pts;
+            scoreElem.textContent = 'Score: ' + gameScore;
+          }
+        }
+        if (gameScore >= 1225 && notreadyAudio.paused === false) {
+          notreadyAudio.pause();
+          notreadyAudio.currentTime = 0;
+          starlightAudio.currentTime = 0;
+          starlightAudio.play();
+        }
+      }
+      
+      function calcScore(jumps) {
+        let score = 0;
+        for (let i = 1; i <= jumps; i++) {
+          if (i % 100 === 0) score += 100;
+          else if (i % 50 === 0) score += 50;
+          else if (i % 10 === 0) score += 10;
+          else if (i % 5 === 0) score += 5;
+          else score += 1;
+        }
+        return score;
+      }
+      
+      // Quality of life: prevent drag/selection
+      document.addEventListener('selectstart', e => e.preventDefault());
+      document.addEventListener('dragstart', e => e.preventDefault());
+      
+      function loop() {
+        if (!popupActive) update();
+        draw();
+        requestAnimationFrame(loop);
+      }
+      
+      renderHighScore();
+      reset();
+      loop();
+    }
+
+    // Snowstorm animation (runs until manually stopped)
+    function animateSnowstorm(onComplete) {
+      const ctx = snowCanvas.getContext('2d');
+      snowCanvas.width = window.innerWidth;
+      snowCanvas.height = window.innerHeight;
+      let snowflakes = [];
+      let alpha = 0;
+      let frame = 0;
+      const maxAlpha = 1;
+      const fadeInDuration = 120; // frames for fade in
+      const snowflakeCount = 120;
+      let running = true;
+      for (let i = 0; i < snowflakeCount; i++) {
+        snowflakes.push({
+          x: Math.random() * snowCanvas.width,
+          y: Math.random() * snowCanvas.height,
+          r: 1 + Math.random() * 3,
+          d: Math.random() * Math.PI * 2,
+          speed: 1 + Math.random() * 2
+        });
+      }
+      function draw() {
+        if (!running) return;
+        ctx.clearRect(0, 0, snowCanvas.width, snowCanvas.height);
+        // White overlay with increasing alpha
+        alpha = Math.min(maxAlpha, frame / fadeInDuration);
+        ctx.save();
+        ctx.globalAlpha = alpha * 0.7;
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(0, 0, snowCanvas.width, snowCanvas.height);
+        ctx.restore();
+        // Draw snowflakes
+        for (let flake of snowflakes) {
+          ctx.save();
+          ctx.globalAlpha = 0.7 + 0.3 * Math.random();
+          ctx.beginPath();
+          ctx.arc(flake.x, flake.y, flake.r, 0, 2 * Math.PI);
+          ctx.fillStyle = '#fff';
+          ctx.shadowColor = '#fff';
+          ctx.shadowBlur = 8;
+          ctx.fill();
+          ctx.restore();
+          // Move snowflake
+          flake.y += flake.speed;
+          flake.x += Math.sin(flake.d + frame / 20) * 0.5;
+          if (flake.y > snowCanvas.height) {
+            flake.y = -flake.r;
+            flake.x = Math.random() * snowCanvas.width;
+          }
+        }
+        frame++;
+        requestAnimationFrame(draw);
+      }
+      draw();
+      // When called, stop animation and fade to white
+      onComplete && onComplete();
+    }
+  </script>
+</body>
+</html>
